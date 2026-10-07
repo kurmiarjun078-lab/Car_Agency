@@ -137,21 +137,6 @@ class _WishlistCard extends StatelessWidget {
                       pushScreen(context, CarBookingScreen(car: car)),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: PrimaryButton(
-                  label: 'Buy Now',
-                  outlined: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  height: 48,
-                  radius: 12,
-                  fontSize: 18,
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Checkout (not designed yet)')),
-                  ),
-                ),
-              ),
             ],
           ),
         ],

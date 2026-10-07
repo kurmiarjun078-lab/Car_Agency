@@ -117,18 +117,6 @@ class CarDetailsScreen extends StatelessWidget {
                           pushScreen(context, CarBookingScreen(car: car)),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: PrimaryButton(
-                      label: 'Buy Now',
-                      backgroundColor: AppColors.navy,
-                      height: 54,
-                      radius: 10,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      onPressed: () => _snack(context, 'Checkout (not designed yet)'),
-                    ),
-                  ),
                 ],
               ),
             ),

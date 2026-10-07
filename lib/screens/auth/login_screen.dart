@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
 import '../../widgets/form_fields.dart';
@@ -6,6 +7,7 @@ import '../../widgets/primary_button.dart';
 import '../admin/admin_shell.dart';
 import '../user/user_shell.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,20 +29,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() {
     FocusScope.of(context).unfocus();
-    // Demo routing only: an email starting with "admin" opens the admin app.
-    // Replace with real auth (e.g. FirebaseAuth) later.
-    final isAdmin = _email.text.trim().toLowerCase().startsWith('admin');
-    replaceAll(context, isAdmin ? const AdminShell() : const UserShell());
+
+    final isAdmin =
+        _email.text.trim().toLowerCase().startsWith('admin');
+
+    replaceAll(
+      context,
+      isAdmin ? const AdminShell() : const UserShell(),
+    );
   }
 
   void _continueAsAdmin() {
     FocusScope.of(context).unfocus();
-    replaceAll(context, const AdminShell());
+
+    replaceAll(
+      context,
+      const AdminShell(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final topGap = MediaQuery.sizeOf(context).height * 0.07;
+    final topGap = MediaQuery.sizeOf(context).height * 0.025;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -48,10 +59,38 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                ),
                 child: Column(
                   children: [
                     SizedBox(height: topGap),
+
+                    // =========================
+                    // CAR IMAGE
+                    // =========================
+                    SizedBox(
+                      width: double.infinity,
+                      height: 170,
+                      child: Image.asset(
+                        'assets/cars/bmw_m4.png',
+                        fit: BoxFit.contain,
+                        errorBuilder:
+                            (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.directions_car_filled_rounded,
+                            size: 110,
+                            color: Color(0xFF222222),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    // =========================
+                    // DRIVEHUB
+                    // =========================
                     const FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
@@ -63,17 +102,36 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 6),
-                    const Text('Premium Car Agency', style: TextStyle(fontSize: 18)),
-                    const SizedBox(height: 52),
+
+                    const Text(
+                      'Premium Car Agency',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Color(0xFF666666),
+                      ),
+                    ),
+
+                    const SizedBox(height: 38),
+
+                    // =========================
+                    // EMAIL
+                    // =========================
                     LoginField(
                       label: 'Email Address',
                       hint: 'john.doe@example.com',
                       icon: Icons.mail,
                       controller: _email,
-                      keyboardType: TextInputType.emailAddress,
+                      keyboardType:
+                          TextInputType.emailAddress,
                     ),
+
                     const SizedBox(height: 18),
+
+                    // =========================
+                    // PASSWORD
+                    // =========================
                     LoginField(
                       label: 'Password',
                       hint: '••••••••',
@@ -82,14 +140,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _password,
                       obscure: true,
                     ),
+
                     const SizedBox(height: 10),
+
+                    // =========================
+                    // FORGOT PASSWORD
+                    // =========================
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () => ScaffoldMessenger.of(context)
-                            .showSnackBar(const SnackBar(
-                          content: Text('Forgot password screen not designed yet'),
-                        )),
+                        onPressed: () {
+                          pushScreen(
+                            context,
+                            const ForgotPasswordScreen(),
+                          );
+                        },
                         child: const Text(
                           'Forgot Password?',
                           style: TextStyle(
@@ -99,7 +164,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 18),
+
+                    // =========================
+                    // LOGIN BUTTON
+                    // =========================
                     PrimaryButton(
                       label: 'Login',
                       onPressed: _login,
@@ -109,7 +179,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontWeight: FontWeight.w500,
                       shadow: true,
                     ),
+
                     const SizedBox(height: 12),
+
+                    // =========================
+                    // ADMIN BUTTON
+                    // =========================
                     PrimaryButton(
                       label: 'Continue as Admin',
                       onPressed: _continueAsAdmin,
@@ -121,21 +196,43 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
+
                     const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
+
+            // =========================
+            // REGISTER
+            // =========================
             Padding(
-              padding: const EdgeInsets.only(bottom: 28, top: 8),
+              padding: const EdgeInsets.only(
+                bottom: 28,
+                top: 8,
+              ),
               child: GestureDetector(
-                onTap: () => pushScreen(context, const RegisterScreen()),
+                onTap: () {
+                  pushScreen(
+                    context,
+                    const RegisterScreen(),
+                  );
+                },
                 child: const Text.rich(
                   TextSpan(
                     text: "Don't have an account? ",
-                    children: [TextSpan(text: 'Register')],
+                    children: [
+                      TextSpan(
+                        text: 'Register',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
-                  style: TextStyle(fontSize: 17),
+                  style: TextStyle(
+                    fontSize: 17,
+                  ),
                 ),
               ),
             ),
