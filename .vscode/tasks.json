@@ -1,0 +1,41 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Generate Android platform",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"create",
+				".",
+				"--platforms=android"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Analyze nested auth screens",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"analyze",
+				"drivehub/lib/screen/login_screen.dart",
+				"drivehub/lib/screen/register_screen.dart"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build Android debug APK",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"build",
+				"apk",
+				"--debug"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
