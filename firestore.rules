@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function profilePhotoWithinLimit() {
+      return !request.resource.data.keys().hasAny(['photo']) ||
+        (request.resource.data.photo is string &&
+          request.resource.data.photo.size() <= 400000);
+    }
+
+    // Profiles: a user can read/edit only their own profile (but never
+    // change their own role). Admins can read everyone.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.role == 'user'
+                    && profilePhotoWithinLimit();
+      allow update: if signedIn() && profilePhotoWithinLimit() && (
+                      (request.auth.uid == uid
+                        && request.resource.data.role == resource.data.role)
+                      || isAdmin());
+
+      match /wishlist/{carId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Cars: everyone logged in can read, only admins can change.
+    match /cars/{carId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+
+      match /ratings/{uid} {
+        allow read: if signedIn();
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasAll(['rating', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['rating', 'updatedAt'])
+          && request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5;
+      }
+    }
+
+    // Test-drive bookings
+    match /bookings/{id} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'Cancelled');
+      allow delete: if isAdmin();
+    }
+
+    // Service bookings
+    match /serviceBookings/{id} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid
+          && request.resource.data.status == 'Cancelled');
+      allow delete: if isAdmin();
+    }
+  }
+}
