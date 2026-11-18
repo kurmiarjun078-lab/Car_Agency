@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
-/// Shows [asset] if it exists, otherwise a neutral placeholder.
-/// >>> Replace by dropping the real PNG/JPG into assets/cars/ <<<
+/// Shows a car picture. [asset] can be a bundled asset path
+/// ('assets/...'), a web URL ('http...') or a base64 string (admin uploads).
+/// Falls back to a neutral placeholder when it is missing or broken.
 class CarImage extends StatelessWidget {
   const CarImage({
     super.key,
@@ -16,20 +19,63 @@ class CarImage extends StatelessWidget {
   final double radius;
   final bool dark;
 
+  static final Map<String, Uint8List> _cache = {};
+
+  static Uint8List? _decode(String data) {
+    final cached = _cache[data];
+    if (cached != null) return cached;
+    try {
+      final comma = data.indexOf(',');
+      final raw = data.startsWith('data:') && comma != -1
+          ? data.substring(comma + 1)
+          : data;
+      final bytes = base64Decode(raw);
+      _cache[data] = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final placeholder = _CarPlaceholder(dark: dark);
-    Widget child = asset == null
-        ? placeholder
-        : Image.asset(
-            asset!,
-            fit: fit,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (_, __, ___) => placeholder,
-          );
+    final a = asset;
+    Widget child;
+    if (a == null || a.isEmpty) {
+      child = placeholder;
+    } else if (a.startsWith('assets/')) {
+      child = Image.asset(
+        a,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    } else if (a.startsWith('http')) {
+      child = Image.network(
+        a,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    } else {
+      final bytes = _decode(a);
+      child = bytes == null
+          ? placeholder
+          : Image.memory(
+              bytes,
+              fit: fit,
+              width: double.infinity,
+              height: double.infinity,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => placeholder,
+            );
+    }
     if (radius > 0) {
-      child = ClipRRect(borderRadius: BorderRadius.circular(radius), child: child);
+      child =
+          ClipRRect(borderRadius: BorderRadius.circular(radius), child: child);
     }
     return child;
   }
@@ -42,7 +88,8 @@ class _CarPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
-      final side = c.biggest.shortestSide.isFinite ? c.biggest.shortestSide : 80.0;
+      final side =
+          c.biggest.shortestSide.isFinite ? c.biggest.shortestSide : 80.0;
       return Container(
         width: double.infinity,
         height: double.infinity,
@@ -68,19 +115,71 @@ class _CarPlaceholder extends StatelessWidget {
 
 /// Round user avatar with a person-icon fallback.
 class Avatar extends StatelessWidget {
-  const Avatar({super.key, required this.size, this.asset, this.ring = false});
+  const Avatar({
+    super.key,
+    required this.size,
+    this.asset,
+    this.photo,
+    this.name,
+    this.ring = false,
+  });
 
   final double size;
   final String? asset;
+  final String? photo;
+
+  /// Used for initials when there is no picture.
+  final String? name;
   final bool ring;
 
   @override
   Widget build(BuildContext context) {
+    final initial = (name ?? '').trim();
     final fallback = Container(
       color: const Color(0xFFD9DCE2),
       alignment: Alignment.center,
-      child: Icon(Icons.person, size: size * 0.6, color: Colors.white),
+      child: initial.isEmpty
+          ? Icon(Icons.person, size: size * 0.6, color: Colors.white)
+          : Text(
+              initial[0].toUpperCase(),
+              style: TextStyle(
+                fontSize: size * 0.45,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
     );
+    final image = (photo?.isNotEmpty ?? false) ? photo : asset;
+    Widget imageWidget = fallback;
+    if (image != null && image.isNotEmpty) {
+      if (image.startsWith('assets/')) {
+        imageWidget = Image.asset(
+          image,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      } else if (image.startsWith('http')) {
+        imageWidget = Image.network(
+          image,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      } else {
+        try {
+          final comma = image.indexOf(',');
+          final raw = image.startsWith('data:') && comma != -1
+              ? image.substring(comma + 1)
+              : image;
+          imageWidget = Image.memory(
+            base64Decode(raw),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback,
+          );
+        } on FormatException {
+          imageWidget = fallback;
+        }
+      }
+    }
     return Container(
       width: size,
       height: size,
@@ -99,13 +198,7 @@ class Avatar extends StatelessWidget {
             : null,
       ),
       child: ClipOval(
-        child: asset == null
-            ? fallback
-            : Image.asset(
-                asset!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => fallback,
-              ),
+        child: imageWidget,
       ),
     );
   }

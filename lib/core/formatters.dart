@@ -1,5 +1,5 @@
-/// Formats a price. For ₹ the grouping follows the Figma exactly
-/// (e.g. 7500000 -> ₹75,00,000 and 11200000 -> ₹112,00,000).
+/// Formats a price. ₹ uses Indian grouping (7500000 -> ₹75,00,000,
+/// 11200000 -> ₹1,12,00,000).
 String formatPrice(int value, {String symbol = '₹'}) {
   final s = value.toString();
   if (symbol == '₹') return '$symbol${_indian(s)}';
@@ -9,11 +9,14 @@ String formatPrice(int value, {String symbol = '₹'}) {
 String _indian(String s) {
   if (s.length <= 3) return s;
   final last3 = s.substring(s.length - 3);
-  final rest = s.substring(0, s.length - 3);
-  if (rest.length <= 2) return '$rest,$last3';
-  final lakh = rest.substring(rest.length - 2);
-  final head = rest.substring(0, rest.length - 2);
-  return '$head,$lakh,$last3';
+  var rest = s.substring(0, s.length - 3);
+  final parts = <String>[];
+  while (rest.length > 2) {
+    parts.insert(0, rest.substring(rest.length - 2));
+    rest = rest.substring(0, rest.length - 2);
+  }
+  if (rest.isNotEmpty) parts.insert(0, rest);
+  return '${parts.join(',')},$last3';
 }
 
 String _western(String s) {
@@ -31,3 +34,10 @@ const List<String> _months = [
 ];
 
 String formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+/// Short money label for dashboards: ₹2.45 Cr, ₹7.50 L, ₹4,500.
+String formatCompactPrice(int value, {String symbol = '₹'}) {
+  if (value >= 10000000) return '$symbol${(value / 10000000).toStringAsFixed(2)} Cr';
+  if (value >= 100000) return '$symbol${(value / 100000).toStringAsFixed(2)} L';
+  return formatPrice(value, symbol: symbol);
+}

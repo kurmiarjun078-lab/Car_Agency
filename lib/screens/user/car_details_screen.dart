@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
 import '../../data/models.dart';
+import '../../services/db_service.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/car_image.dart';
+import '../../widgets/heart_button.dart';
 import '../../widgets/primary_button.dart';
 import 'car_booking_screen.dart';
+import 'gallery_screen.dart';
 
 class CarDetailsScreen extends StatelessWidget {
   const CarDetailsScreen({super.key, required this.car});
@@ -20,8 +24,22 @@ class CarDetailsScreen extends StatelessWidget {
   ];
   static const _tabFor = [0, 1, 2, 4];
 
-  void _snack(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  /// Copies the car summary so it can be pasted into WhatsApp, SMS, etc.
+  Future<void> _share(BuildContext context) async {
+    final text = '${car.name} (${car.brand})\n'
+        'Price: ${car.priceLabel}\n'
+        '${car.fuel} | ${car.transmission} | ${car.seats} seats\n'
+        'Book a test drive on DriveHub!';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+          content: Text('Car details copied. You can paste them anywhere.')),
+    );
+  }
+
+  void _openGallery(BuildContext context) {
+    pushScreen(context, GalleryScreen(title: car.name, images: car.allImages));
   }
 
   @override
@@ -32,7 +50,7 @@ class CarDetailsScreen extends StatelessWidget {
         bottom: false,
         child: Column(
           children: [
-            _TopBar(onShare: () => _snack(context, 'Share (not wired yet)')),
+            _TopBar(car: car, onShare: () => _share(context)),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -41,7 +59,7 @@ class CarDetailsScreen extends StatelessWidget {
                   children: [
                     _ImageHero(
                       car: car,
-                      onView360: () => _snack(context, '360° viewer (not wired yet)'),
+                      onOpenGallery: () => _openGallery(context),
                     ),
                     const SizedBox(height: 36),
                     Text(
@@ -64,35 +82,38 @@ class CarDetailsScreen extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              car.rating.toString(),
-                              style: const TextStyle(fontSize: 17),
-                            ),
-                            const SizedBox(width: 3),
-                            const Icon(Icons.star, size: 20, color: AppColors.star),
-                            const SizedBox(width: 6),
-                            Text(
-                              '(${car.reviews} reviews)',
-                              style: const TextStyle(
-                                fontSize: 17,
-                                color: AppColors.textGrey,
-                              ),
-                            ),
-                          ],
-                        ),
+                        _CarRating(car: car),
                       ],
                     ),
                     const SizedBox(height: 16),
                     const Divider(height: 1, color: AppColors.divider),
                     const SizedBox(height: 16),
                     _SpecsGrid(specs: car.specs),
-                    const SizedBox(height: 16),
-                    const Divider(height: 1, color: AppColors.divider),
-                    const SizedBox(height: 16),
-                    _FeaturesGrid(features: car.features),
+                    if (car.featureItems.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Divider(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 16),
+                      _FeaturesGrid(features: car.featureItems),
+                    ],
+                    if (car.description.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Divider(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'About this car',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        car.description,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textMuted,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -135,8 +156,115 @@ class CarDetailsScreen extends StatelessWidget {
   }
 }
 
+class _CarRating extends StatefulWidget {
+  const _CarRating({required this.car});
+
+  final Car car;
+
+  @override
+  State<_CarRating> createState() => _CarRatingState();
+}
+
+class _CarRatingState extends State<_CarRating> {
+  late final Stream<CarRatingSummary> _ratings =
+      DbService.instance.watchCarRatings(widget.car);
+  bool _saving = false;
+
+  Future<void> _rate(int value) async {
+    setState(() => _saving = true);
+    try {
+      await DbService.instance.rateCar(widget.car.id, value);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rating saved')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save rating: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<CarRatingSummary>(
+      stream: _ratings,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Text('Could not load ratings: ${snapshot.error}');
+        }
+
+        final summary = snapshot.data;
+        final count = summary?.count ?? widget.car.reviews;
+        final average = summary?.average ?? widget.car.rating;
+        final userRating = summary?.userRating ?? 0;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  count == 0 ? 'No ratings yet' : average.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 17),
+                ),
+                if (count > 0) ...[
+                  const SizedBox(width: 3),
+                  const Icon(Icons.star, size: 20, color: AppColors.star),
+                  const SizedBox(width: 6),
+                  Text(
+                    '($count ${count == 1 ? 'review' : 'reviews'})',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      color: AppColors.textGrey,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              userRating == 0
+                  ? 'Tap a star to rate this car'
+                  : 'Your rating: $userRating stars · tap to change',
+              style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var value = 1; value <= 5; value++)
+                  IconButton(
+                    onPressed:
+                        summary == null || _saving ? null : () => _rate(value),
+                    tooltip: 'Rate $value stars',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      value <= userRating ? Icons.star : Icons.star_border,
+                      color: AppColors.star,
+                    ),
+                  ),
+                if (_saving)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.onShare});
+  const _TopBar({required this.car, required this.onShare});
+  final Car car;
   final VoidCallback onShare;
 
   @override
@@ -159,6 +287,7 @@ class _TopBar extends StatelessWidget {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
             ),
           ),
+          HeartButton(car: car, size: 30, color: Colors.black),
           IconButton(
             onPressed: onShare,
             icon: const Icon(Icons.ios_share, size: 26),
@@ -169,13 +298,21 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _ImageHero extends StatelessWidget {
-  const _ImageHero({required this.car, required this.onView360});
+class _ImageHero extends StatefulWidget {
+  const _ImageHero({required this.car, required this.onOpenGallery});
   final Car car;
-  final VoidCallback onView360;
+  final VoidCallback onOpenGallery;
+
+  @override
+  State<_ImageHero> createState() => _ImageHeroState();
+}
+
+class _ImageHeroState extends State<_ImageHero> {
+  int _page = 0;
 
   @override
   Widget build(BuildContext context) {
+    final images = widget.car.allImages;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -187,7 +324,38 @@ class _ImageHero extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
             ),
             clipBehavior: Clip.antiAlias,
-            child: CarImage(asset: car.imageAsset, fit: BoxFit.contain),
+            child: images.length <= 1
+                ? CarImage(
+                    asset: images.isEmpty ? null : images.first,
+                    fit: BoxFit.contain,
+                  )
+                : Stack(
+                    children: [
+                      PageView.builder(
+                        itemCount: images.length,
+                        onPageChanged: (i) => setState(() => _page = i),
+                        itemBuilder: (_, i) =>
+                            CarImage(asset: images[i], fit: BoxFit.contain),
+                      ),
+                      Positioned(
+                        top: 10,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${_page + 1}/${images.length}',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
         Positioned(
@@ -202,17 +370,18 @@ class _ImageHero extends StatelessWidget {
               shape: const StadiumBorder(),
               child: InkWell(
                 customBorder: const StadiumBorder(),
-                onTap: onView360,
+                onTap: widget.onOpenGallery,
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.threesixty, size: 24),
+                      Icon(Icons.photo_library_outlined, size: 24),
                       SizedBox(width: 8),
                       Text(
-                        '360 View',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+                        'Gallery',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),

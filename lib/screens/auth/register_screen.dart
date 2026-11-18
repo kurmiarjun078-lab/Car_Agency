@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/form_fields.dart';
 import '../../widgets/primary_button.dart';
 import '../user/user_shell.dart';
@@ -27,15 +28,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _register() {
+  bool _loading = false;
+
+  Future<void> _register() async {
     FocusScope.of(context).unfocus();
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (_name.text.trim().isEmpty || _email.text.trim().isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Name and email are required.')),
+      );
+      return;
+    }
     if (_password.text != _confirm.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Passwords do not match')),
       );
       return;
     }
-    replaceAll(context, const UserShell());
+
+    setState(() => _loading = true);
+    try {
+      await AuthService.instance.register(
+        name: _name.text,
+        phone: _phone.text,
+        email: _email.text,
+        password: _password.text,
+      );
+      if (!mounted) return;
+      replaceAll(context, const UserShell());
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(AuthService.friendlyError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -123,8 +151,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 24),
                     PrimaryButton(
-                      label: 'Register',
-                      onPressed: _register,
+                      label: _loading ? 'Please wait...' : 'Register',
+                      onPressed: _loading ? () {} : _register,
                       height: 48,
                       radius: 24,
                       fontSize: 18,

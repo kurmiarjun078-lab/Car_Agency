@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/formatters.dart';
-import '../../data/mock_data.dart';
+import '../../data/car_store.dart';
 import '../../data/models.dart';
+import '../../services/db_service.dart';
 import '../../widgets/car_image.dart';
+import '../../widgets/status_chip.dart';
 import 'admin_add_car_screen.dart';
 
-class AdminDashboardScreen extends StatelessWidget {
-  const AdminDashboardScreen({super.key});
+class AdminDashboardScreen extends StatefulWidget {
+  const AdminDashboardScreen({super.key, required this.onNavigate});
+
+  /// Switches the admin bottom-nav tab (1 Cars, 2 Bookings, 3 Customers).
+  final ValueChanged<int> onNavigate;
+
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  late final Stream<List<BookingItem>> _bookings =
+      DbService.instance.watchBookings();
+  late final Stream<List<AppUser>> _customers =
+      DbService.instance.watchCustomers();
 
   @override
   Widget build(BuildContext context) {
@@ -36,70 +51,98 @@ class AdminDashboardScreen extends StatelessWidget {
                     icon: const Icon(Icons.menu, size: 34),
                     onSelected: (value) {
                       switch (value) {
-                        case 'Overview':
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Dashboard overview refreshed')),
-                          );
-                          break;
                         case 'Add New Car':
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => const AdminAddCarScreen(),
                             ),
                           );
-                          break;
+                        case 'Manage Cars':
+                          widget.onNavigate(1);
+                        case 'Bookings':
+                          widget.onNavigate(2);
                         case 'Customers':
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Customer management opened')),
-                          );
-                          break;
-                        default:
-                          break;
+                          widget.onNavigate(3);
                       }
                     },
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'Overview', child: Text('Overview')),
                       PopupMenuItem(value: 'Add New Car', child: Text('Add New Car')),
+                      PopupMenuItem(value: 'Manage Cars', child: Text('Manage Cars')),
+                      PopupMenuItem(value: 'Bookings', child: Text('Bookings')),
                       PopupMenuItem(value: 'Customers', child: Text('Customers')),
                     ],
                   ),
                 ],
               ),
               const SizedBox(height: 14),
-              const _AdminCard(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(label: 'Total Cars', value: '250'),
+              StreamBuilder<List<BookingItem>>(
+                stream: _bookings,
+                builder: (context, bookingSnap) {
+                  final bookings = bookingSnap.data ?? const <BookingItem>[];
+                  final revenue = bookings
+                      .where((b) => b.status == 'Completed')
+                      .fold<int>(0, (sum, b) => sum + b.price);
+                  return Column(
+                    children: [
+                      _AdminCard(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ValueListenableBuilder<List<Car>>(
+                                    valueListenable: CarStore.items,
+                                    builder: (_, cars, __) => _StatCard(
+                                      label: 'Total Cars',
+                                      value: '${cars.length}',
+                                    ),
+                                  ),
+                                ),
+                                const _StatDivider(vertical: true),
+                                Expanded(
+                                  child: _StatCard(
+                                    label: 'Total Bookings',
+                                    value: '${bookings.length}',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const _StatDivider(),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: StreamBuilder<List<AppUser>>(
+                                    stream: _customers,
+                                    builder: (_, snap) => _StatCard(
+                                      label: 'Total Customers',
+                                      value: '${snap.data?.length ?? 0}',
+                                    ),
+                                  ),
+                                ),
+                                const _StatDivider(vertical: true),
+                                Expanded(
+                                  child: _StatCard(
+                                    label: 'Revenue',
+                                    value: formatCompactPrice(revenue),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        _StatDivider(vertical: true),
-                        Expanded(
-                          child:
-                              _StatCard(label: 'Total Bookings', value: '580'),
-                        ),
-                      ],
-                    ),
-                    _StatDivider(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                              label: 'Total Customers', value: '430'),
-                        ),
-                        _StatDivider(vertical: true),
-                        Expanded(
-                          child: _StatCard(label: 'Revenue', value: '₹2.45 Cr'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                      const SizedBox(height: 18),
+                      _RecentOrders(
+                        bookings: bookings.take(4).toList(),
+                        loading: !bookingSnap.hasData && !bookingSnap.hasError,
+                        error: bookingSnap.error,
+                        onSeeAll: () => widget.onNavigate(2),
+                      ),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 18),
-              const _RecentOrders(),
             ],
           ),
         ),
@@ -177,28 +220,58 @@ class _StatDivider extends StatelessWidget {
 }
 
 class _RecentOrders extends StatelessWidget {
-  const _RecentOrders();
+  const _RecentOrders({
+    required this.bookings,
+    required this.loading,
+    required this.onSeeAll,
+    this.error,
+  });
+  final List<BookingItem> bookings;
+  final bool loading;
+  final Object? error;
+  final VoidCallback onSeeAll;
 
   @override
   Widget build(BuildContext context) {
-    const orders = MockData.recentOrders;
     return _AdminCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Recent Orders',
-            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 12),
-          for (var i = 0; i < orders.length; i++) ...[
-            _OrderRow(order: orders[i]),
-            if (i != orders.length - 1)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Divider(height: 1, color: AppColors.divider),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Recent Bookings',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+                ),
               ),
-          ],
+              TextButton(onPressed: onSeeAll, child: const Text('See all')),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (error != null)
+            Text('Could not load data: $error',
+                style: const TextStyle(color: Colors.red))
+          else if (loading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (bookings.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('There are no bookings yet.',
+                  style: TextStyle(color: AppColors.textMuted)),
+            )
+          else
+            for (var i = 0; i < bookings.length; i++) ...[
+              _OrderRow(booking: bookings[i]),
+              if (i != bookings.length - 1)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(height: 1, color: AppColors.divider),
+                ),
+            ],
         ],
       ),
     );
@@ -206,17 +279,27 @@ class _RecentOrders extends StatelessWidget {
 }
 
 class _OrderRow extends StatelessWidget {
-  const _OrderRow({required this.order});
-  final OrderItem order;
+  const _OrderRow({required this.booking});
+  final BookingItem booking;
 
   @override
   Widget build(BuildContext context) {
+    final b = booking;
+    final image = CarStore.byId(b.carId)?.image ?? b.image;
     return Row(
       children: [
         SizedBox(
           width: 50,
           height: 50,
-          child: CarImage(asset: order.imageAsset, radius: 8),
+          child: b.type == BookingType.testDrive
+              ? CarImage(asset: image, radius: 8)
+              : Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.serviceIconBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.build_outlined),
+                ),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -224,70 +307,23 @@ class _OrderRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                order.carName,
+                b.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 19),
+                style: const TextStyle(fontSize: 18),
               ),
               Text(
-                formatPrice(order.price),
-                style: const TextStyle(fontSize: 17),
+                '${b.customer} - ${formatPrice(b.price)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
               ),
             ],
           ),
         ),
         const SizedBox(width: 8),
-        _StatusChip(status: order.status),
+        StatusChip(b.status),
       ],
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final OrderStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    late final String label;
-    late final Color bg;
-    late final Color fg;
-    late final Color dot;
-    switch (status) {
-      case OrderStatus.completed:
-        label = 'Completed';
-        bg = AppColors.successBg;
-        fg = AppColors.successText;
-        dot = AppColors.successDot;
-      case OrderStatus.delivered:
-        label = 'Delivered';
-        bg = AppColors.successBg;
-        fg = AppColors.successText;
-        dot = AppColors.successDot;
-      case OrderStatus.pending:
-        label = 'Pending';
-        bg = AppColors.pendingBg;
-        fg = AppColors.pendingText;
-        dot = AppColors.pendingDot;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 7),
-          Text(label, style: TextStyle(fontSize: 16, color: fg)),
-        ],
-      ),
     );
   }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/formatters.dart';
 import '../../data/car_filter.dart';
-import '../../data/mock_data.dart';
+import '../../data/app_data.dart';
 import '../../widgets/form_fields.dart';
 import '../../widgets/primary_button.dart';
 
@@ -26,10 +26,11 @@ class CarFilterSheet extends StatefulWidget {
 
 class _CarFilterSheetState extends State<CarFilterSheet> {
   static const double _min = 500000; // slider domain
-  static const double _max = 8000000;
-  static const RangeValues _defaultRange = RangeValues(1000000, 5000000);
+  static const double _max = 60000000;
+  static const RangeValues _defaultRange = RangeValues(_min, _max);
 
   late RangeValues _range;
+  String? _category;
   String? _brand;
   String? _fuel;
   String? _transmission;
@@ -44,6 +45,7 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
       (f.minPrice ?? _defaultRange.start.toInt()).toDouble(),
       (f.maxPrice ?? _defaultRange.end.toInt()).toDouble(),
     );
+    _category = f.category;
     _brand = f.brand;
     _fuel = f.fuel;
     _transmission = f.transmission;
@@ -53,7 +55,7 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
 
   void _reset() => setState(() {
         _range = _defaultRange;
-        _brand = _fuel = _transmission = _seats = null;
+        _category = _brand = _fuel = _transmission = _seats = null;
         _color = null;
       });
 
@@ -62,6 +64,7 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
     Navigator.of(context).pop(CarFilter(
       minPrice: priceTouched ? _range.start.round() : null,
       maxPrice: priceTouched ? _range.end.round() : null,
+      category: _category,
       brand: _brand,
       fuel: _fuel,
       transmission: _transmission,
@@ -144,9 +147,17 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
                 ),
                 const SizedBox(height: 20),
                 DropdownCard(
+                  label: 'Category',
+                  hint: 'Select Category',
+                  items: AppData.categoryNames,
+                  value: _category,
+                  onChanged: (v) => setState(() => _category = v),
+                ),
+                const SizedBox(height: 12),
+                DropdownCard(
                   label: 'Brand',
                   hint: 'Select Brand',
-                  items: MockData.brands,
+                  items: AppData.brands,
                   value: _brand,
                   onChanged: (v) => setState(() => _brand = v),
                 ),
@@ -154,7 +165,7 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
                 DropdownCard(
                   label: 'Fuel Type',
                   hint: 'Select Fuel Type',
-                  items: MockData.fuelTypes,
+                  items: AppData.fuelTypes,
                   value: _fuel,
                   onChanged: (v) => setState(() => _fuel = v),
                 ),
@@ -162,7 +173,7 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
                 DropdownCard(
                   label: 'Transmission',
                   hint: 'Select Transmission',
-                  items: MockData.transmissions,
+                  items: AppData.transmissions,
                   value: _transmission,
                   onChanged: (v) => setState(() => _transmission = v),
                 ),
@@ -170,7 +181,7 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
                 DropdownCard(
                   label: 'Seats',
                   hint: 'Select Seats',
-                  items: MockData.seatOptions,
+                  items: AppData.seatOptions,
                   value: _seats,
                   onChanged: (v) => setState(() => _seats = v),
                 ),
@@ -183,9 +194,9 @@ class _CarFilterSheetState extends State<CarFilterSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    for (var i = 0; i < MockData.filterColors.length; i++)
+                    for (var i = 0; i < AppData.filterColors.length; i++)
                       _ColorDot(
-                        color: MockData.filterColors[i],
+                        color: AppData.filterColors[i],
                         selected: _color == i,
                         onTap: () =>
                             setState(() => _color = _color == i ? null : i),

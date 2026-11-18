@@ -3,6 +3,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
+import '../admin/admin_shell.dart';
+import '../user/user_shell.dart';
 import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -31,14 +34,24 @@ class _SplashScreenState extends State<SplashScreen> {
     super.dispose();
   }
 
-  void _nextScreen() {
+  Future<void> _nextScreen() async {
+    if (!mounted) return;
+
+    Widget next = const OnboardingScreen();
+    // Already logged in earlier? Go straight to the right area.
+    if (AuthService.instance.currentUser != null) {
+      try {
+        final role = await AuthService.instance.currentRole();
+        next = role == 'admin' ? const AdminShell() : const UserShell();
+      } catch (_) {
+        next = const UserShell();
+      }
+    }
     if (!mounted) return;
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => const OnboardingScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => next),
     );
   }
 

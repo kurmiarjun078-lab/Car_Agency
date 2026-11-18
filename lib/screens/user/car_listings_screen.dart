@@ -3,23 +3,40 @@ import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 import '../../core/navigation.dart';
 import '../../data/car_filter.dart';
-import '../../data/mock_data.dart';
+import '../../data/car_store.dart';
+import '../../data/models.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/car_cards.dart';
 import 'car_details_screen.dart';
 import 'car_filter_sheet.dart';
 
-/// "Car Listings" design (Poppins, USD prices, Home/Listings/Favorites/Profile bar).
+/// "Car Listings": all cars, optionally opened with a search text or a
+/// filter (category / brand tapped on the Home screen).
 class CarListingsScreen extends StatefulWidget {
-  const CarListingsScreen({super.key});
+  const CarListingsScreen({
+    super.key,
+    this.initialQuery = '',
+    this.initialFilter = CarFilter.empty,
+  });
+
+  final String initialQuery;
+  final CarFilter initialFilter;
 
   @override
   State<CarListingsScreen> createState() => _CarListingsScreenState();
 }
 
 class _CarListingsScreenState extends State<CarListingsScreen> {
-  String _query = '';
-  CarFilter _filter = CarFilter.empty;
+  late String _query = widget.initialQuery;
+  late CarFilter _filter = widget.initialFilter;
+  late final TextEditingController _searchController =
+      TextEditingController(text: widget.initialQuery);
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   static const _items = [
     NavItemData(Icons.home_outlined, 'Home', activeIcon: Icons.home),
@@ -38,12 +55,16 @@ class _CarListingsScreenState extends State<CarListingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cars = MockData.listingCars
-        .where((c) =>
-            '${c.name} ${c.brand}'.toLowerCase().contains(_query.toLowerCase()) &&
-            _filter.matches(c, usePrice: false)) // prices here are in USD
-        .toList();
+    return ValueListenableBuilder<List<Car>>(
+      valueListenable: CarStore.items,
+      builder: (context, all, _) => _buildScaffold(
+        context,
+        applyCarFilters(all, query: _query, filter: _filter),
+      ),
+    );
+  }
 
+  Widget _buildScaffold(BuildContext context, List<Car> cars) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -101,6 +122,7 @@ class _CarListingsScreenState extends State<CarListingsScreen> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: TextField(
+                                      controller: _searchController,
                                       onChanged: (v) => setState(() => _query = v),
                                       style: const TextStyle(
                                         fontFamily: AppFonts.poppins,

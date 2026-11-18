@@ -4,7 +4,7 @@ import '../../widgets/app_bottom_nav.dart';
 import 'browse_cars_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
-import 'service_booking_screen.dart';
+import 'my_bookings_screen.dart';
 import 'wishlist_screen.dart';
 
 /// Main app frame with the 5-tab bottom bar from the Home design.
@@ -42,7 +42,7 @@ class _UserShellState extends State<UserShell> {
         children: [
           HomeScreen(onNavigate: _select),
           const BrowseCarsScreen(),
-          const ServiceBookingScreen(),
+          const MyBookingsScreen(),
           WishlistScreen(onBack: () => _select(0)),
           const ProfileScreen(),
         ],

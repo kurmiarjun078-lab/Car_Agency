@@ -33,7 +33,7 @@ class BrowseCarCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CarImage(asset: car.imageAsset),
+                  CarImage(asset: car.image),
                   Positioned(
                     top: 4,
                     right: 4,
@@ -122,7 +122,7 @@ class ListingCarCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CarImage(asset: car.imageAsset),
+                  CarImage(asset: car.image),
                   Positioned(
                     top: 2,
                     right: 2,

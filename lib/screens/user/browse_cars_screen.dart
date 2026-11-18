@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
 import '../../data/car_filter.dart';
-import '../../data/mock_data.dart';
+import '../../data/car_store.dart';
 import '../../data/models.dart';
 import '../../widgets/car_cards.dart';
 import '../../widgets/form_fields.dart';
@@ -21,26 +21,6 @@ class _BrowseCarsScreenState extends State<BrowseCarsScreen> {
   CarFilter _filter = CarFilter.empty;
   SortOption _sort = SortOption.none;
   Key _searchFieldKey = UniqueKey();
-
-  List<Car> get _cars {
-    final query = _query.trim().toLowerCase();
-    final list = MockData.browseCars
-        .where((c) =>
-            '${c.name} ${c.brand}'.toLowerCase().contains(query) &&
-            _filter.matches(c))
-        .toList();
-    switch (_sort) {
-      case SortOption.priceLow:
-        list.sort((a, b) => a.price.compareTo(b.price));
-      case SortOption.priceHigh:
-        list.sort((a, b) => b.price.compareTo(a.price));
-      case SortOption.rating:
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-      case SortOption.none:
-        break;
-    }
-    return list;
-  }
 
   Future<void> _openFilter() async {
     final result = await showCarFilterSheet(context, _filter);
@@ -94,7 +74,16 @@ class _BrowseCarsScreenState extends State<BrowseCarsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cars = _cars;
+    return ValueListenableBuilder<List<Car>>(
+      valueListenable: CarStore.items,
+      builder: (context, all, _) => _buildBody(
+        context,
+        applyCarFilters(all, query: _query, filter: _filter, sort: _sort),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, List<Car> cars) {
     return SafeArea(
       bottom: false,
       child: LayoutBuilder(builder: (context, constraints) {

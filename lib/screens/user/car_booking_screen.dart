@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
-import '../../data/mock_data.dart';
+import '../../core/formatters.dart';
+import '../../data/app_data.dart';
 import '../../data/models.dart';
 import '../../widgets/car_image.dart';
+import '../../services/db_service.dart';
 import '../../widgets/primary_button.dart';
 
 class CarBookingScreen extends StatefulWidget {
@@ -16,18 +18,51 @@ class CarBookingScreen extends StatefulWidget {
 
 class _CarBookingScreenState extends State<CarBookingScreen> {
   String _time = '10:00 AM';
+  DateTime _date = DateTime.now().add(const Duration(days: 1));
+  bool _saving = false;
 
-  // Static in the Figma; hook these up to real dealer data later.
-  static const _dealer = 'DriveHub Motors';
-  static const _location = 'Kathmandu, Nepal';
+  static const _dealer = AppData.dealerName;
+  static const _location = AppData.dealerLocation;
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 90)),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
 
   Future<void> _confirm() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await DbService.instance.bookTestDrive(
+        car: widget.car,
+        date: _date,
+        time: _time,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save booking: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Booking confirmed'),
+        title: const Text('Booking requested'),
         content: Text(
-          '${widget.car.name} at $_dealer, $_location\nTime: $_time',
+          '${widget.car.name}\n$_dealer, $_location\n'
+          '${formatDate(_date)} at $_time\n\n'
+          'Status: "Pending" - awaiting dealer confirmation. '
+          'You can check the status in the Bookings tab.',
         ),
         actions: [
           TextButton(
@@ -77,7 +112,7 @@ class _CarBookingScreenState extends State<CarBookingScreen> {
                     const SizedBox(height: 18),
                     AspectRatio(
                       aspectRatio: 1.7,
-                      child: CarImage(asset: car.imageAsset, fit: BoxFit.contain),
+                      child: CarImage(asset: car.image, fit: BoxFit.contain),
                     ),
                     const SizedBox(height: 22),
                     const _InfoCard(
@@ -90,6 +125,15 @@ class _CarBookingScreenState extends State<CarBookingScreen> {
                       icon: Icons.location_on,
                       label: 'Location',
                       value: _location,
+                    ),
+                    const SizedBox(height: 14),
+                    GestureDetector(
+                      onTap: _pickDate,
+                      child: _InfoCard(
+                        icon: Icons.calendar_month,
+                        label: 'Select Date',
+                        value: formatDate(_date),
+                      ),
                     ),
                     const SizedBox(height: 14),
                     _InfoCard(
@@ -106,7 +150,7 @@ class _CarBookingScreenState extends State<CarBookingScreen> {
                             color: Colors.black,
                           ),
                           items: [
-                            for (final t in MockData.dealerTimes)
+                            for (final t in AppData.dealerTimes)
                               DropdownMenuItem(value: t, child: Text(t)),
                           ],
                           onChanged: (v) => setState(() => _time = v ?? _time),
@@ -115,7 +159,7 @@ class _CarBookingScreenState extends State<CarBookingScreen> {
                     ),
                     const SizedBox(height: 22),
                     PrimaryButton(
-                      label: 'Confirm Booking',
+                      label: _saving ? 'Please wait...' : 'Confirm Booking',
                       onPressed: _confirm,
                       height: 58,
                       radius: 22,

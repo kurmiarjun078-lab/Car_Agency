@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
+import '../../data/models.dart';
+import '../../data/profile_store.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/app_dialogs.dart';
 import '../../widgets/car_image.dart';
 import '../auth/login_screen.dart';
-import 'service_booking_screen.dart';
+import 'my_bookings_screen.dart';
 import 'settings_screen.dart';
 import 'wishlist_screen.dart';
 
@@ -13,25 +17,20 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItem>[
-      
       _MenuItem(Icons.favorite_border, 'Wishlist',
           () => pushScreen(context, const WishlistScreen())),
-      _MenuItem(Icons.calendar_today_outlined, 'My Bookings',
-          () => pushScreen(
-                context,
-                Scaffold(
-                  appBar: AppBar(
-                    backgroundColor: Colors.white,
-                    surfaceTintColor: Colors.transparent,
-                  ),
-                  body: const ServiceBookingScreen(),
-                ),
-              )),
-    
+      _MenuItem(
+        Icons.calendar_today_outlined,
+        'My Bookings',
+        () => pushScreen(context, const MyBookingsScreen(showBack: true)),
+      ),
       _MenuItem(Icons.settings_outlined, 'Settings',
           () => pushScreen(context, const SettingsScreen())),
-      _MenuItem(Icons.logout, 'Logout',
-          () => replaceAll(context, const LoginScreen())),
+      _MenuItem(Icons.logout, 'Logout', () async {
+        if (!await confirmLogout(context)) return;
+        await AuthService.instance.logout();
+        if (context.mounted) replaceAll(context, const LoginScreen());
+      }),
     ];
 
     return Container(
@@ -42,25 +41,54 @@ class ProfileScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
           child: Column(
             children: [
-              
-              const Avatar(size: 112, asset: 'assets/avatars/bishal.png', ring: true),
-              const SizedBox(height: 16),
-              const Text(
-                'Bishal Thapa',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF3C3E45),
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'bishal.thapa@drivehub.com',
-                style: TextStyle(fontSize: 17, color: Color(0xFF4A4C53)),
-              ),
-              const Text(
-                '+917 980000000',
-                style: TextStyle(fontSize: 17, color: Color(0xFF4A4C53)),
+              ValueListenableBuilder<AppUser?>(
+                valueListenable: ProfileStore.user,
+                builder: (context, profile, _) {
+                  final auth = AuthService.instance.currentUser;
+                  var name = profile?.name ?? '';
+                  if (name.isEmpty) name = auth?.displayName ?? '';
+                  final email = (profile?.email.isNotEmpty ?? false)
+                      ? profile!.email
+                      : (auth?.email ?? '');
+                  final phone = profile?.phone ?? '';
+                  return Column(
+                    children: [
+                      Avatar(
+                        size: 112,
+                        name: name,
+                        photo: profile?.photo,
+                        ring: true,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        name.isEmpty ? 'DriveHub User' : name,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF3C3E45),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        email,
+                        style: const TextStyle(
+                            fontSize: 17, color: Color(0xFF4A4C53)),
+                      ),
+                      if (phone.isNotEmpty)
+                        Text(
+                          phone,
+                          style: const TextStyle(
+                              fontSize: 17, color: Color(0xFF4A4C53)),
+                        ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => showEditProfileDialog(context),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit profile'),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 28),
               Container(

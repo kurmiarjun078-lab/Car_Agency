@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 import '../../core/navigation.dart';
-import '../../data/mock_data.dart';
+import '../../data/app_data.dart';
+import '../../data/car_filter.dart';
+import '../../data/car_store.dart';
 import '../../data/models.dart';
+import '../../data/profile_store.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/car_image.dart';
 import '../../widgets/heart_button.dart';
 import '../../widgets/section_header.dart';
 import 'car_details_screen.dart';
 import 'car_listings_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.onNavigate});
@@ -25,12 +30,19 @@ class HomeScreen extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.only(top: 16, bottom: 24),
         children: [
-          const Padding(
-              padding: EdgeInsets.symmetric(horizontal: pad), child: _Header()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: pad),
+            child: _Header(onProfileTap: () => onNavigate(4)),
+          ),
           const SizedBox(height: 18),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: pad),
-            child: _SearchBox(onSubmit: () => onNavigate(1)),
+            child: _SearchBox(
+              onSubmit: (q) => pushScreen(
+                context,
+                CarListingsScreen(initialQuery: q.trim()),
+              ),
+            ),
           ),
           const SizedBox(height: 18),
           const _Categories(),
@@ -49,7 +61,7 @@ class HomeScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: pad),
             child: SectionHeader(
               title: 'Popular Brands',
-              onSeeAll: () => onNavigate(1),
+              onSeeAll: () => pushScreen(context, const CarListingsScreen()),
             ),
           ),
           const SizedBox(height: 12),
@@ -71,54 +83,72 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header();
+  const _Header({required this.onProfileTap});
+
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // TODO: replace with assets/avatars/bishal.png
-        const Avatar(size: 52, asset: 'assets/avatars/bishal.png'),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hello, Bishal',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: AppFonts.poppins,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w700,
-                ),
+    return ValueListenableBuilder<AppUser?>(
+      valueListenable: ProfileStore.user,
+      builder: (context, profile, _) {
+        var name = profile?.name ?? '';
+        if (name.isEmpty)
+          name = AuthService.instance.currentUser?.displayName ?? '';
+        final first =
+            name.trim().isEmpty ? 'there' : name.trim().split(' ').first;
+        return Row(
+          children: [
+            Tooltip(
+              message: 'Profile',
+              child: InkWell(
+                onTap: onProfileTap,
+                customBorder: const CircleBorder(),
+                child: Avatar(size: 52, name: name, photo: profile?.photo),
               ),
-              Text(
-                'Find your dream car',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: AppFonts.poppins,
-                  fontSize: 14.5,
-                  color: AppColors.textGrey,
-                ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hello, $first',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: AppFonts.poppins,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Text(
+                    'Find your dream car',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: AppFonts.poppins,
+                      fontSize: 14.5,
+                      color: AppColors.textGrey,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.notifications, size: 30),
-        ),
-      ],
+            ),
+            IconButton(
+              onPressed: () => pushScreen(context, const NotificationsScreen()),
+              icon: const Icon(Icons.notifications, size: 30),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _SearchBox extends StatelessWidget {
   const _SearchBox({required this.onSubmit});
-  final VoidCallback onSubmit;
+  final ValueChanged<String> onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +166,7 @@ class _SearchBox extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
-              onSubmitted: (_) => onSubmit(),
+              onSubmitted: onSubmit,
               textInputAction: TextInputAction.search,
               style: const TextStyle(fontSize: 17),
               decoration: const InputDecoration(
@@ -167,38 +197,68 @@ class _Categories extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 22),
-        itemCount: MockData.categories.length,
+        itemCount: AppData.categories.length,
         separatorBuilder: (_, __) => const SizedBox(width: 18),
         itemBuilder: (_, i) {
-          final c = MockData.categories[i];
-          return SizedBox(
-            width: 58,
-            child: Column(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: AppShadows.card,
+          final c = AppData.categories[i];
+          return GestureDetector(
+              onTap: () => pushScreen(
+                    context,
+                    CarListingsScreen(
+                        initialFilter: CarFilter(category: c.label)),
                   ),
-                  child: Icon(c.icon, size: 28),
+              child: SizedBox(
+                width: 58,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: AppShadows.card,
+                      ),
+                      child: Icon(c.icon, size: 28),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      c.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: AppFonts.poppins,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  c.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: AppFonts.poppins,
-                    fontSize: 13.5,
-                  ),
-                ),
-              ],
-            ),
-          );
+              ));
         },
+      ),
+    );
+  }
+}
+
+class _EmptyHint extends StatelessWidget {
+  const _EmptyHint(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: CarStore.loading,
+        builder: (context, loading, _) => Center(
+          child: loading
+              ? const CircularProgressIndicator()
+              : Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+        ),
       ),
     );
   }
@@ -212,21 +272,27 @@ class _FeaturedList extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardWidth = width - 22 - 28; // leaves a peek of the next card
     final cardHeight = cardWidth * 0.48;
-    return SizedBox(
-      height: cardHeight,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        itemCount: MockData.featuredCars.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) {
-          final car = MockData.featuredCars[i];
-          return SizedBox(
-            width: cardWidth,
-            child: _FeaturedCard(car: car),
-          );
-        },
-      ),
+    return ValueListenableBuilder<List<Car>>(
+      valueListenable: CarStore.items,
+      builder: (context, _, __) {
+        final cars = CarStore.featured;
+        if (cars.isEmpty) {
+          return const _EmptyHint('No cars are available yet.');
+        }
+        return SizedBox(
+          height: cardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            itemCount: cars.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (_, i) => SizedBox(
+              width: cardWidth,
+              child: _FeaturedCard(car: cars[i]),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -255,8 +321,8 @@ class _FeaturedCard extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 44),
-              child: CarImage(
-                  asset: car.imageAsset, dark: true, fit: BoxFit.contain),
+              child:
+                  CarImage(asset: car.image, dark: true, fit: BoxFit.contain),
             ),
             // Bottom gradient so the white text stays readable.
             const DecoratedBox(
@@ -345,48 +411,54 @@ class _BrandsList extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 22),
-        itemCount: MockData.popularBrands.length,
+        itemCount: AppData.popularBrands.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
-          final name = MockData.popularBrands.keys.elementAt(i);
-          final logo = MockData.popularBrands[name]!;
-          return Container(
-            width: 62,
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: AppShadows.card,
-            ),
-            child: Column(
-              children: [
-                SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: Image.asset(
-                    logo,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Text(name[0],
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ),
+          final name = AppData.popularBrands.keys.elementAt(i);
+          final logo = AppData.popularBrands[name]!;
+          return GestureDetector(
+              onTap: () => pushScreen(
+                    context,
+                    CarListingsScreen(initialFilter: CarFilter(brand: name)),
                   ),
+              child: Container(
+                width: 62,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: AppShadows.card,
                 ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      name,
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10.5, height: 1.1),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Image.asset(
+                        logo,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(name[0],
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          name,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5, height: 1.1),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
+              ));
         },
       ),
     );
@@ -401,52 +473,59 @@ class _RecommendedList extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardWidth = width * 0.5;
     final imageHeight = cardWidth * 0.62;
-    const cars = MockData.browseCars;
-    return SizedBox(
-      height: imageHeight + 62,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        itemCount: cars.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 18),
-        itemBuilder: (_, i) {
-          final car = cars[i];
-          return SizedBox(
-            width: cardWidth,
-            child: GestureDetector(
-              onTap: () => pushScreen(context, CarDetailsScreen(car: car)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: imageHeight,
-                    child: CarImage(asset: car.imageAsset, radius: 18),
+    return ValueListenableBuilder<List<Car>>(
+      valueListenable: CarStore.items,
+      builder: (context, all, _) {
+        if (all.isEmpty) return const SizedBox.shrink();
+        final cars = [...all]..sort((a, b) => b.rating.compareTo(a.rating));
+        final shown = cars.take(8).toList();
+        return SizedBox(
+          height: imageHeight + 62,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            itemCount: shown.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 18),
+            itemBuilder: (_, i) {
+              final car = shown[i];
+              return SizedBox(
+                width: cardWidth,
+                child: GestureDetector(
+                  onTap: () => pushScreen(context, CarDetailsScreen(car: car)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: imageHeight,
+                        child: CarImage(asset: car.image, radius: 18),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        car.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: AppFonts.poppins,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        car.priceLabel,
+                        style: const TextStyle(
+                          fontFamily: AppFonts.poppins,
+                          fontSize: 14,
+                          color: AppColors.textGrey,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    car.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: AppFonts.poppins,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                  Text(
-                    car.priceLabel,
-                    style: const TextStyle(
-                      fontFamily: AppFonts.poppins,
-                      fontSize: 14,
-                      color: AppColors.textGrey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

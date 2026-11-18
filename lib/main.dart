@@ -1,9 +1,19 @@
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'firebase_options.dart';
 import 'core/app_theme.dart';
+import 'services/auth_service.dart';
 import 'screens/auth/splash_screen.dart';
 
-void main() => runApp(const DriveHubApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  AuthService.instance.init();
+  runApp(const DriveHubApp());
+}
 
 class DriveHubApp extends StatelessWidget {
   const DriveHubApp({super.key});

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/formatters.dart';
-import '../../data/mock_data.dart';
+import '../../data/app_data.dart';
+import '../../services/db_service.dart';
 import '../../widgets/primary_button.dart';
 
 class ServiceBookingScreen extends StatefulWidget {
@@ -13,16 +14,16 @@ class ServiceBookingScreen extends StatefulWidget {
 
 class _ServiceBookingScreenState extends State<ServiceBookingScreen> {
   int _selected = 0;
-  // Initial values copied from the Figma. Use DateTime.now() in production.
-  DateTime _date = DateTime(2024, 5, 24);
+  DateTime _date = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _time = const TimeOfDay(hour: 11, minute: 0);
+  bool _saving = false;
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
+      firstDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+      lastDate: DateTime.now().add(const Duration(days: 180)),
     );
     if (picked != null) setState(() => _date = picked);
   }
@@ -32,21 +33,46 @@ class _ServiceBookingScreenState extends State<ServiceBookingScreen> {
     if (picked != null) setState(() => _time = picked);
   }
 
-  void _confirm() {
-    final s = MockData.services[_selected];
+  Future<void> _confirm() async {
+    if (_saving) return;
+    final s = AppData.services[_selected];
+    final timeText = _time.format(context);
+    setState(() => _saving = true);
+    try {
+      await DbService.instance.bookService(
+        service: s,
+        date: _date,
+        time: timeText,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not book the service: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        '${s.name} booked for ${formatDate(_date)}, ${_time.format(context)}',
-      ),
+      content: Text('${s.name} booked for ${formatDate(_date)}, $timeText'),
     ));
+    Navigator.of(context).maybePop();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+      ),
+      body: SafeArea(
       bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(26, 28, 26, 24),
+        padding: const EdgeInsets.fromLTRB(26, 4, 26, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -65,11 +91,11 @@ class _ServiceBookingScreenState extends State<ServiceBookingScreen> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
-            for (var i = 0; i < MockData.services.length; i++) ...[
+            for (var i = 0; i < AppData.services.length; i++) ...[
               _ServiceTile(
-                icon: MockData.services[i].icon,
-                name: MockData.services[i].name,
-                price: formatPrice(MockData.services[i].price),
+                icon: AppData.services[i].icon,
+                name: AppData.services[i].name,
+                price: formatPrice(AppData.services[i].price),
                 selected: i == _selected,
                 onTap: () => setState(() => _selected = i),
               ),
@@ -99,7 +125,7 @@ class _ServiceBookingScreenState extends State<ServiceBookingScreen> {
             ),
             const SizedBox(height: 18),
             PrimaryButton(
-              label: 'Confirm Service',
+              label: _saving ? 'Please wait...' : 'Confirm Service',
               onPressed: _confirm,
               height: 54,
               radius: 27,
@@ -109,7 +135,7 @@ class _ServiceBookingScreenState extends State<ServiceBookingScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

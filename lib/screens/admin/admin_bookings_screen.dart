@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/formatters.dart';
+import '../../data/car_store.dart';
+import '../../data/models.dart';
+import '../../services/db_service.dart';
 import '../../widgets/car_image.dart';
+import '../../widgets/status_chip.dart';
 
+/// Admin: all test-drive and service bookings (live), with status updates.
 class AdminBookingsScreen extends StatefulWidget {
   const AdminBookingsScreen({super.key});
 
@@ -12,196 +17,310 @@ class AdminBookingsScreen extends StatefulWidget {
 }
 
 class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
+  late final Stream<List<BookingItem>> _stream =
+      DbService.instance.watchBookings();
   String _query = '';
   String _filter = 'All';
 
-  static const _bookings = [
-    _Booking(
-      id: 'BK-1024',
-      customer: 'Bishal Thapa',
-      car: 'BMW M4 Coupe',
-      date: 'Oct 12, 2026',
-      price: 7500000,
-      status: 'Confirmed',
-      image: 'assets/cars/bmw_m4.png',
-    ),
-    _Booking(
-      id: 'BK-1023',
-      customer: 'Sagar Acharya',
-      car: 'Audi A6',
-      date: 'Oct 14, 2026',
-      price: 6500000,
-      status: 'Pending',
-      image: 'assets/cars/audi_a6.png',
-    ),
-    _Booking(
-      id: 'BK-1022',
-      customer: 'Alex Shrestha',
-      car: 'Tesla Model Y',
-      date: 'Oct 08, 2026',
-      price: 5500000,
-      status: 'Completed',
-      image: 'assets/cars/tesla_model_y.png',
-    ),
-    _Booking(
-      id: 'BK-1021',
-      customer: 'Rohan Karki',
-      car: 'Mercedes C-Class',
-      date: 'Oct 18, 2026',
-      price: 6600000,
-      status: 'Pending',
-      image: 'assets/cars/mercedes_c_class.png',
-    ),
-  ];
+  Future<void> _openDetails(BookingItem b) async {
+    final status = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BookingSheet(booking: b),
+    );
+    if (status == null || status == b.status) return;
+    try {
+      await DbService.instance.setBookingStatus(b, status);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${b.code} is now $status.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update status: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final query = _query.trim().toLowerCase();
-    final bookings = _bookings.where((booking) {
-      final matchesQuery = booking.id.toLowerCase().contains(query) ||
-          booking.customer.toLowerCase().contains(query) ||
-          booking.car.toLowerCase().contains(query);
-      final matchesFilter = _filter == 'All' || booking.status == _filter;
-      return matchesQuery && matchesFilter;
-    }).toList();
-
     return Container(
       color: AppColors.bgAdmin,
       child: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 24, 18, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'MANAGE BOOKINGS',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Review and track customer reservations',
-                    style: TextStyle(fontSize: 14, color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: const [
-                      Expanded(
-                        child: _BookingMetric(
-                          label: 'Total',
-                          value: '24',
-                          icon: Icons.calendar_month_rounded,
+        child: StreamBuilder<List<BookingItem>>(
+          stream: _stream,
+          builder: (context, snap) {
+            final all = snap.data ?? const <BookingItem>[];
+            final query = _query.trim().toLowerCase();
+            final list = all.where((b) {
+              final matchesQuery = query.isEmpty ||
+                  b.code.toLowerCase().contains(query) ||
+                  b.customer.toLowerCase().contains(query) ||
+                  b.title.toLowerCase().contains(query);
+              return matchesQuery && (_filter == 'All' || b.status == _filter);
+            }).toList();
+            int count(String s) => all.where((b) => b.status == s).length;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 24, 18, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'MANAGE BOOKINGS',
+                        style: TextStyle(
+                            fontSize: 28, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Test drives and service reservations',
+                        style:
+                            TextStyle(fontSize: 14, color: AppColors.textMuted),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _Metric(
+                              label: 'Total',
+                              value: '${all.length}',
+                              icon: Icons.calendar_month_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Metric(
+                              label: 'Pending',
+                              value: '${count('Pending')}',
+                              icon: Icons.pending_actions_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Metric(
+                              label: 'Completed',
+                              value: '${count('Completed')}',
+                              icon: Icons.task_alt_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        onChanged: (v) => setState(() => _query = v),
+                        decoration: InputDecoration(
+                          hintText: 'Search customer, car or booking ID',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                       ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: _BookingMetric(
-                          label: 'Pending',
-                          value: '06',
-                          icon: Icons.pending_actions_rounded,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: _BookingMetric(
-                          label: 'Completed',
-                          value: '18',
-                          icon: Icons.task_alt_rounded,
+                      const SizedBox(height: 12),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final f in ['All', ...BookingItem.statuses])
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(f),
+                                  selected: _filter == f,
+                                  onSelected: (_) =>
+                                      setState(() => _filter = f),
+                                  selectedColor: Colors.black,
+                                  labelStyle: TextStyle(
+                                    color: _filter == f
+                                        ? Colors.white
+                                        : Colors.black,
+                                  ),
+                                  backgroundColor: Colors.white,
+                                  showCheckmark: false,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    onChanged: (value) => setState(() => _query = value),
-                    decoration: InputDecoration(
-                      hintText: 'Search customer, car or booking ID',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                ),
+                Expanded(
+                  child: snap.hasError
+                      ? Center(
+                          child: Text('Could not load bookings: ${snap.error}'))
+                      : !snap.hasData
+                          ? const Center(child: CircularProgressIndicator())
+                          : list.isEmpty
+                              ? const Center(child: Text('No bookings found.'))
+                              : ListView.separated(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(18, 4, 18, 18),
+                                  itemCount: list.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (_, i) => _BookingCard(
+                                    booking: list[i],
+                                    onTap: () => _openDetails(list[i]),
+                                  ),
+                                ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.label, required this.value, required this.icon});
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 22),
+          const SizedBox(height: 8),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BookingCard extends StatelessWidget {
+  const _BookingCard({required this.booking, required this.onTap});
+  final BookingItem booking;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final image = CarStore.byId(b.carId)?.image ?? b.image;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: AppShadows.card,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 70,
+              height: 54,
+              child: b.type == BookingType.testDrive
+                  ? CarImage(asset: image, radius: 10)
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.serviceIconBg,
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      child: const Icon(Icons.build_outlined),
                     ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    b.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 14),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final filter in const [
-                          'All',
-                          'Pending',
-                          'Confirmed',
-                          'Completed',
-                        ])
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(filter),
-                              selected: _filter == filter,
-                              onSelected: (_) => setState(() => _filter = filter),
-                              selectedColor: AppColors.black,
-                              backgroundColor: Colors.white,
-                              labelStyle: TextStyle(
-                                color: _filter == filter
-                                    ? Colors.white
-                                    : AppColors.textMuted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              side: BorderSide.none,
-                              showCheckmark: false,
-                            ),
-                          ),
-                      ],
-                    ),
+                  Text(
+                    b.customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    '${b.code} - ${formatDate(b.date)}, ${b.time}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12.5, color: AppColors.textMuted),
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: bookings.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No bookings found',
-                        style: TextStyle(
-                            fontSize: 16, color: AppColors.textMuted),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(18, 2, 18, 24),
-                      itemCount: bookings.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) => _BookingCard(
-                        booking: bookings[index],
-                        onTap: () => _showDetails(context, bookings[index]),
-                      ),
-                    ),
-            ),
+            const SizedBox(width: 8),
+            StatusChip(b.status),
           ],
         ),
       ),
     );
   }
+}
 
-  void _showDetails(BuildContext context, _Booking booking) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: SafeArea(
-          top: false,
+class _BookingSheet extends StatelessWidget {
+  const _BookingSheet({required this.booking});
+  final BookingItem booking;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    Widget row(String l, String v) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 96,
+                child:
+                    Text(l, style: const TextStyle(color: AppColors.textMuted)),
+              ),
+              Expanded(
+                child: Text(v,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,288 +335,51 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Booking details',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  _BookingStatus(status: booking.status),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _DetailLine(label: 'Booking ID', value: booking.id),
-              _DetailLine(label: 'Customer', value: booking.customer),
-              _DetailLine(label: 'Vehicle', value: booking.car),
-              _DetailLine(label: 'Booking date', value: booking.date),
-              _DetailLine(
-                label: 'Vehicle price',
-                value: formatPrice(booking.price),
-                isLast: true,
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: AppColors.borderLight),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text('Close'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Booking {
-  const _Booking({
-    required this.id,
-    required this.customer,
-    required this.car,
-    required this.date,
-    required this.price,
-    required this.status,
-    required this.image,
-  });
-
-  final String id;
-  final String customer;
-  final String car;
-  final String date;
-  final int price;
-  final String status;
-  final String image;
-}
-
-class _BookingMetric extends StatelessWidget {
-  const _BookingMetric({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 19, color: AppColors.textMuted),
-          const SizedBox(height: 9),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BookingCard extends StatelessWidget {
-  const _BookingCard({required this.booking, required this.onTap});
-
-  final _Booking booking;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.all(13),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: Text(
-                      booking.id,
+                      '${b.code} - ${b.typeLabel}',
                       style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
+                          fontSize: 20, fontWeight: FontWeight.w800),
                     ),
                   ),
-                  _BookingStatus(status: booking.status),
+                  StatusChip(b.status),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 92,
-                    height: 72,
-                    child: CarImage(asset: booking.image, radius: 12),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          booking.car,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          booking.customer,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14, color: AppColors.textMuted),
-                        ),
-                        const SizedBox(height: 5),
-                        Row(
-                          children: [
-                            const Icon(Icons.event_outlined,
-                                size: 15, color: AppColors.textGrey),
-                            const SizedBox(width: 4),
-                            Text(
-                              booking.date,
-                              style: const TextStyle(
-                                  fontSize: 13, color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Divider(height: 1, color: AppColors.divider),
               const SizedBox(height: 10),
-              Row(
+              row(b.type == BookingType.testDrive ? 'Car' : 'Service', b.title),
+              row('Customer', b.customer),
+              if (b.phone.isNotEmpty) row('Phone', b.phone),
+              row('Date', formatDate(b.date)),
+              row('Time', b.time),
+              if (b.location.isNotEmpty) row('Location', b.location),
+              row('Amount', formatPrice(b.price)),
+              const SizedBox(height: 14),
+              const Text('Change status',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  const Text(
-                    'Vehicle price',
-                    style: TextStyle(fontSize: 13, color: AppColors.textMuted),
-                  ),
-                  const Spacer(),
-                  Text(
-                    formatPrice(booking.price),
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: AppColors.textGrey),
+                  for (final s in BookingItem.statuses)
+                    ChoiceChip(
+                      label: Text(s),
+                      selected: b.status == s,
+                      showCheckmark: false,
+                      selectedColor: Colors.black,
+                      labelStyle: TextStyle(
+                        color: b.status == s ? Colors.white : Colors.black,
+                      ),
+                      onSelected: (_) => Navigator.of(context).pop(s),
+                    ),
                 ],
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _BookingStatus extends StatelessWidget {
-  const _BookingStatus({required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (background, foreground) = switch (status) {
-      'Confirmed' => (AppColors.successBg, AppColors.successText),
-      'Completed' => (const Color(0xFFE8EFFA), const Color(0xFF315A91)),
-      _ => (AppColors.pendingBg, AppColors.pendingText),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailLine extends StatelessWidget {
-  const _DetailLine({
-    required this.label,
-    required this.value,
-    this.isLast = false,
-  });
-
-  final String label;
-  final String value;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(bottom: BorderSide(color: AppColors.divider)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(label,
-                style: const TextStyle(color: AppColors.textMuted)),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
       ),
     );
   }

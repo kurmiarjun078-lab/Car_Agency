@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
+import '../../widgets/app_dialogs.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,11 +11,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _pushNotifications = true;
-  bool _darkMode = false;
-  bool _biometricLogin = true;
-  bool _locationAccess = true;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -52,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: 'Manage your account profile',
                     trailing: const Icon(Icons.chevron_right_rounded,
                         color: AppColors.textGrey),
-                    onTap: () {},
+                    onTap: () => showEditProfileDialog(context),
                   ),
                   _SettingsTile(
                     icon: Icons.lock_outline_rounded,
@@ -60,41 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: 'Password and sign-in settings',
                     trailing: const Icon(Icons.chevron_right_rounded,
                         color: AppColors.textGrey),
-                    onTap: () {},
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              const _SectionHeader(title: 'Preferences'),
-              _SettingsCard(
-                children: [
-                  _SwitchTile(
-                    icon: Icons.notifications_none_rounded,
-                    title: 'Push notifications',
-                    subtitle: 'Receive updates and offers',
-                    value: _pushNotifications,
-                    onChanged: (value) => setState(() => _pushNotifications = value),
-                  ),
-                  _SwitchTile(
-                    icon: Icons.dark_mode_outlined,
-                    title: 'Dark mode',
-                    subtitle: 'Use a dark interface',
-                    value: _darkMode,
-                    onChanged: (value) => setState(() => _darkMode = value),
-                  ),
-                  _SwitchTile(
-                    icon: Icons.fingerprint_rounded,
-                    title: 'Biometric login',
-                    subtitle: 'Use Face ID or fingerprint',
-                    value: _biometricLogin,
-                    onChanged: (value) => setState(() => _biometricLogin = value),
-                  ),
-                  _SwitchTile(
-                    icon: Icons.location_on_outlined,
-                    title: 'Location access',
-                    subtitle: 'For nearby offers and service alerts',
-                    value: _locationAccess,
-                    onChanged: (value) => setState(() => _locationAccess = value),
+                    onTap: () => showSecurityDialog(context),
                   ),
                 ],
               ),
@@ -108,7 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: 'Find answers to common questions',
                     trailing: const Icon(Icons.chevron_right_rounded,
                         color: AppColors.textGrey),
-                    onTap: () {},
+                    onTap: () => showHelpCenter(context),
                   ),
                   _SettingsTile(
                     icon: Icons.headset_mic_outlined,
@@ -116,7 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: 'Talk to our customer care team',
                     trailing: const Icon(Icons.chevron_right_rounded,
                         color: AppColors.textGrey),
-                    onTap: () {},
+                    onTap: () => showContactSupport(context),
                   ),
                   _SettingsTile(
                     icon: Icons.privacy_tip_outlined,
@@ -124,7 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: 'Read our data handling policy',
                     trailing: const Icon(Icons.chevron_right_rounded,
                         color: AppColors.textGrey),
-                    onTap: () {},
+                    onTap: () => showPrivacyPolicy(context),
                   ),
                 ],
               ),
@@ -237,73 +199,6 @@ class _SettingsTile extends StatelessWidget {
             trailing,
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SwitchTile extends StatelessWidget {
-  const _SwitchTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.iconTile,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: AppColors.black, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.black,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textGrey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: Colors.white,
-            activeTrackColor: AppColors.black,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ],
       ),
     );
   }

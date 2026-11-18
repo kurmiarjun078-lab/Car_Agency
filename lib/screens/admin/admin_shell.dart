@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
 import '../../widgets/app_bottom_nav.dart';
+import '../../data/models.dart';
+import '../../data/profile_store.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/app_dialogs.dart';
 import '../auth/login_screen.dart';
-import 'admin_add_car_screen.dart';
+import 'admin_cars_screen.dart';
 import 'admin_bookings_screen.dart';
 import 'admin_customers_screen.dart';
 import 'admin_dashboard_screen.dart';
@@ -36,12 +40,14 @@ class _AdminShellState extends State<AdminShell> {
       body: IndexedStack(
         index: _index,
         children: [
-          const AdminDashboardScreen(),
-          // "Cars" tab opens the Add New Car form (the only car screen designed).
-          AdminAddCarScreen(onBack: () => _select(0)),
+          AdminDashboardScreen(onNavigate: _select),
+          const AdminCarsScreen(),
           const AdminBookingsScreen(),
           const AdminCustomersScreen(),
-          _MoreTab(onLogout: () => replaceAll(context, const LoginScreen())),
+          _MoreTab(onLogout: () async {
+            await AuthService.instance.logout();
+            if (context.mounted) replaceAll(context, const LoginScreen());
+          }),
         ],
       ),
       bottomNavigationBar: AppBottomNav(
@@ -59,7 +65,7 @@ class _AdminShellState extends State<AdminShell> {
 
 class _MoreTab extends StatelessWidget {
   const _MoreTab({required this.onLogout});
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -92,18 +98,39 @@ class _MoreTab extends StatelessWidget {
                   icon: Icons.person_outline_rounded,
                   title: 'Admin profile',
                   subtitle: 'View account and access information',
-                  onTap: () => _showPanel(
-                    context,
-                    icon: Icons.admin_panel_settings_outlined,
-                    title: 'Admin profile',
-                    children: const [
-                      _InfoRow(label: 'Account', value: 'DriveHub Admin'),
-                      _InfoRow(label: 'Role', value: 'Administrator'),
-                      _InfoRow(
-                          label: 'Access',
-                          value: 'Cars, bookings and customers'),
-                    ],
-                  ),
+                  onTap: () {
+                    final AppUser? me = ProfileStore.user.value;
+                    _showPanel(
+                      context,
+                      icon: Icons.admin_panel_settings_outlined,
+                      title: 'Admin profile',
+                      children: [
+                        _InfoRow(
+                          label: 'Name',
+                          value: (me?.name.isNotEmpty ?? false)
+                              ? me!.name
+                              : 'DriveHub Admin',
+                        ),
+                        _InfoRow(label: 'Email', value: AuthService.instance.email),
+                        const _InfoRow(label: 'Role', value: 'Administrator'),
+                        const _InfoRow(
+                            label: 'Access',
+                            value: 'Cars, bookings and customers'),
+                      ],
+                    );
+                  },
+                ),
+                _MoreTile(
+                  icon: Icons.edit_outlined,
+                  title: 'Edit details',
+                  subtitle: 'Change your name and phone number',
+                  onTap: () => showEditProfileDialog(context),
+                ),
+                _MoreTile(
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Change password',
+                  subtitle: 'Send a password reset link to your email',
+                  onTap: () => showSecurityDialog(context),
                 ),
                 _MoreTile(
                   icon: Icons.settings_outlined,
@@ -131,11 +158,11 @@ class _MoreTab extends StatelessWidget {
                     children: const [
                       _InfoRow(
                         label: 'Manage cars',
-                        value: 'Use the Cars tab to add a vehicle.',
+                        value: 'Cars tab: add, edit or delete vehicles.',
                       ),
                       _InfoRow(
                         label: 'Bookings',
-                        value: 'Review and filter reservations in Bookings.',
+                        value: 'Confirm, complete or cancel reservations.',
                       ),
                       _InfoRow(
                         label: 'Customers',
@@ -243,7 +270,7 @@ class _MoreTab extends StatelessWidget {
         ],
       ),
     );
-    if (shouldLogout == true && context.mounted) onLogout();
+    if (shouldLogout == true && context.mounted) await onLogout();
   }
 }
 

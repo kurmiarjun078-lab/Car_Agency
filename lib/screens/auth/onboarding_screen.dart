@@ -75,7 +75,7 @@ class OnboardingScreen extends StatelessWidget {
                         Image.asset(
                           'assets/cars/audi_a5.png',
 
-                          // Image ko card ke andar properly fill karega
+                          // Fits the image inside the card.
                           fit: BoxFit.contain,
 
                           errorBuilder: (

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/navigation.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/form_fields.dart';
 import '../../widgets/primary_button.dart';
 import '../admin/admin_shell.dart';
@@ -10,7 +11,9 @@ import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.adminOnly = false});
+
+  final bool adminOnly;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -27,26 +30,46 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
+  bool _loading = false;
+
+  Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
-    final isAdmin =
-        _email.text.trim().toLowerCase().startsWith('admin');
+    if (_email.text.trim().isEmpty || _password.text.isEmpty) {
+      _toast('Enter your email and password.');
+      return;
+    }
 
-    replaceAll(
-      context,
-      isAdmin ? const AdminShell() : const UserShell(),
-    );
+    setState(() => _loading = true);
+    try {
+      final role = await AuthService.instance
+          .login(_email.text, _password.text);
+      if (!mounted) return;
+      final expectedRole = widget.adminOnly ? 'admin' : 'user';
+      if (role != expectedRole) {
+        await AuthService.instance.logout();
+        if (mounted) {
+          _toast(
+            widget.adminOnly
+                ? 'This account does not have admin access.'
+                : 'This is an admin account. Use Admin Login.',
+          );
+        }
+        return;
+      }
+      replaceAll(
+        context,
+        role == 'admin' ? const AdminShell() : const UserShell(),
+      );
+    } catch (e) {
+      if (mounted) _toast(AuthService.friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  void _continueAsAdmin() {
-    FocusScope.of(context).unfocus();
-
-    replaceAll(
-      context,
-      const AdminShell(),
-    );
-  }
+  void _toast(String msg) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(msg)));
 
   @override
   Widget build(BuildContext context) {
@@ -105,9 +128,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 6),
 
-                    const Text(
-                      'Premium Car Agency',
-                      style: TextStyle(
+                    Text(
+                      widget.adminOnly ? 'Admin Login' : 'Premium Car Agency',
+                      style: const TextStyle(
                         fontSize: 18,
                         color: Color(0xFF666666),
                       ),
@@ -171,30 +194,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     // LOGIN BUTTON
                     // =========================
                     PrimaryButton(
-                      label: 'Login',
-                      onPressed: _login,
+                      label: _loading
+                          ? 'Please wait...'
+                          : widget.adminOnly
+                              ? 'Admin Login'
+                              : 'User Login',
+                      onPressed: _loading ? () {} : _login,
                       height: 54,
                       radius: 20,
                       fontSize: 18,
                       fontWeight: FontWeight.w500,
                       shadow: true,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // =========================
-                    // ADMIN BUTTON
-                    // =========================
-                    PrimaryButton(
-                      label: 'Continue as Admin',
-                      onPressed: _continueAsAdmin,
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      outlined: true,
-                      height: 52,
-                      radius: 18,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
                     ),
 
                     const SizedBox(height: 24),
@@ -207,33 +217,43 @@ class _LoginScreenState extends State<LoginScreen> {
             // REGISTER
             // =========================
             Padding(
-              padding: const EdgeInsets.only(
-                bottom: 28,
-                top: 8,
-              ),
-              child: GestureDetector(
-                onTap: () {
-                  pushScreen(
-                    context,
-                    const RegisterScreen(),
-                  );
-                },
-                child: const Text.rich(
-                  TextSpan(
-                    text: "Don't have an account? ",
-                    children: [
-                      TextSpan(
-                        text: 'Register',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+              padding: const EdgeInsets.only(bottom: 24, top: 8),
+              child: Column(
+                children: [
+                  if (widget.adminOnly)
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Back to user login'),
+                    )
+                  else ...[
+                    GestureDetector(
+                      onTap: () => pushScreen(
+                        context,
+                        const RegisterScreen(),
                       ),
-                    ],
-                  ),
-                  style: TextStyle(
-                    fontSize: 17,
-                  ),
-                ),
+                      child: const Text.rich(
+                        TextSpan(
+                          text: "Don't have an account? ",
+                          children: [
+                            TextSpan(
+                              text: 'Register',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        style: TextStyle(fontSize: 17),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextButton(
+                      onPressed: () => pushScreen(
+                        context,
+                        const LoginScreen(adminOnly: true),
+                      ),
+                      child: const Text('Admin Login'),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],

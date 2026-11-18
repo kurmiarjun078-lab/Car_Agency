@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
-import '../../data/mock_data.dart';
 import '../../data/models.dart';
+import '../../services/db_service.dart';
 import '../../widgets/car_image.dart';
 import '../../widgets/form_fields.dart';
 
@@ -13,22 +13,15 @@ class AdminCustomersScreen extends StatefulWidget {
 }
 
 class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
+  late final Stream<List<AppUser>> _users = DbService.instance.watchCustomers();
+  late final Stream<List<BookingItem>> _bookings =
+      DbService.instance.watchBookings();
   String _query = '';
   String _filter = 'All';
 
   @override
   Widget build(BuildContext context) {
-    final q = _query.toLowerCase();
-    final customers = MockData.customers.where((c) {
-      final matchesQuery = c.name.toLowerCase().contains(q) || c.phone.contains(q);
-      final matchesFilter = switch (_filter) {
-        'VIP' => c.bookings >= 8,
-        'Recent' => c.bookings >= 5,
-        _ => true,
-      };
-      return matchesQuery && matchesFilter;
-    }).toList();
-
+    final q = _query.trim().toLowerCase();
     return SafeArea(
       bottom: false,
       child: Column(
@@ -63,8 +56,8 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                       onSelected: (value) => setState(() => _filter = value),
                       itemBuilder: (_) => const [
                         PopupMenuItem(value: 'All', child: Text('All Customers')),
-                        PopupMenuItem(value: 'VIP', child: Text('VIP Customers')),
-                        PopupMenuItem(value: 'Recent', child: Text('Recent Buyers')),
+                        PopupMenuItem(value: 'Active', child: Text('With bookings')),
+                        PopupMenuItem(value: 'New', child: Text('Joined last 30 days')),
                       ],
                     ),
                   ],
@@ -73,14 +66,54 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
             ),
           ),
           Expanded(
-            child: customers.isEmpty
-                ? const Center(child: Text('No customers found'))
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
-                    itemCount: customers.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _CustomerCard(customer: customers[i]),
-                  ),
+            child: StreamBuilder<List<AppUser>>(
+              stream: _users,
+              builder: (context, userSnap) {
+                if (userSnap.hasError) {
+                  return Center(
+                      child: Text('Could not load customers: ${userSnap.error}'));
+                }
+                if (!userSnap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                return StreamBuilder<List<BookingItem>>(
+                  stream: _bookings,
+                  builder: (context, bookingSnap) {
+                    final counts = <String, int>{};
+                    for (final b in bookingSnap.data ?? const <BookingItem>[]) {
+                      counts[b.userId] = (counts[b.userId] ?? 0) + 1;
+                    }
+                    final cutoff =
+                        DateTime.now().subtract(const Duration(days: 30));
+                    final customers = userSnap.data!.where((c) {
+                      final matchesQuery = c.name.toLowerCase().contains(q) ||
+                          c.email.toLowerCase().contains(q) ||
+                          c.phone.contains(q);
+                      final matchesFilter = switch (_filter) {
+                        'Active' => (counts[c.uid] ?? 0) > 0,
+                        'New' => c.createdAt != null && c.createdAt!.isAfter(cutoff),
+                        _ => true,
+                      };
+                      return matchesQuery && matchesFilter;
+                    }).toList()
+                      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+                    if (customers.isEmpty) {
+                      return const Center(child: Text('No customers found.'));
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+                      itemCount: customers.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (_, i) => _CustomerCard(
+                        customer: customers[i],
+                        bookings: counts[customers[i].uid] ?? 0,
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -89,8 +122,9 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
 }
 
 class _CustomerCard extends StatelessWidget {
-  const _CustomerCard({required this.customer});
-  final Customer customer;
+  const _CustomerCard({required this.customer, required this.bookings});
+  final AppUser customer;
+  final int bookings;
 
   @override
   Widget build(BuildContext context) {
@@ -103,21 +137,25 @@ class _CustomerCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Avatar(size: 44, asset: customer.avatarAsset),
+          Avatar(
+            size: 44,
+            name: customer.name.isEmpty ? customer.email : customer.name,
+            photo: customer.photo,
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  customer.name,
+                  customer.name.isEmpty ? '(no name)' : customer.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 19),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  customer.phone,
+                  customer.phone.isEmpty ? customer.email : customer.phone,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 17),
@@ -127,7 +165,7 @@ class _CustomerCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            '${customer.bookings} Bookings',
+            '$bookings Bookings',
             style: const TextStyle(fontSize: 17, color: AppColors.textMuted),
           ),
         ],

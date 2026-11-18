@@ -4,6 +4,7 @@ import '../../core/navigation.dart';
 import '../../data/models.dart';
 import '../../data/wishlist_store.dart';
 import '../../widgets/car_image.dart';
+import '../../widgets/heart_button.dart';
 import '../../widgets/primary_button.dart';
 import 'car_booking_screen.dart';
 
@@ -92,7 +93,7 @@ class _WishlistCard extends StatelessWidget {
                 flex: 11,
                 child: AspectRatio(
                   aspectRatio: 1.6,
-                  child: CarImage(asset: car.imageAsset, fit: BoxFit.contain),
+                  child: CarImage(asset: car.image, fit: BoxFit.contain),
                 ),
               ),
               const SizedBox(width: 14),
@@ -137,6 +138,9 @@ class _WishlistCard extends StatelessWidget {
                       pushScreen(context, CarBookingScreen(car: car)),
                 ),
               ),
+              const SizedBox(width: 8),
+              // Tap the heart to remove from wishlist.
+              HeartButton(car: car, size: 32, color: Colors.black),
             ],
           ),
         ],
