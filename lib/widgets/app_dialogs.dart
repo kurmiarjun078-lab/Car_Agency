@@ -240,15 +240,15 @@ Future<void> showContactSupport(BuildContext context) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Email'),
-          SelectableText(
+          const SelectableText(
             AppData.supportEmail,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           const Text('Phone'),
-          SelectableText(
+          const SelectableText(
             AppData.supportPhone,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           const Text('Mon - Sat, 9:00 AM to 6:00 PM'),

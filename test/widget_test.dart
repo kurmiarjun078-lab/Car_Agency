@@ -43,7 +43,7 @@ void main() {
   });
 
   test('filters and sorting work', () {
-    final cars = AppData.seedCars;
+    const cars = AppData.seedCars;
     final electric =
         applyCarFilters(cars, filter: const CarFilter(fuel: 'Electric'));
     expect(electric.isNotEmpty, isTrue);

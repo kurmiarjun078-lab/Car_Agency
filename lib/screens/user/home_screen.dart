@@ -13,7 +13,7 @@ import '../../widgets/heart_button.dart';
 import '../../widgets/section_header.dart';
 import 'car_details_screen.dart';
 import 'car_listings_screen.dart';
-import 'notifications_screen.dart';
+// import 'notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.onNavigate});
@@ -93,8 +93,9 @@ class _Header extends StatelessWidget {
       valueListenable: ProfileStore.user,
       builder: (context, profile, _) {
         var name = profile?.name ?? '';
-        if (name.isEmpty)
+        if (name.isEmpty) {
           name = AuthService.instance.currentUser?.displayName ?? '';
+        }
         final first =
             name.trim().isEmpty ? 'there' : name.trim().split(' ').first;
         return Row(
@@ -135,10 +136,10 @@ class _Header extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: () => pushScreen(context, const NotificationsScreen()),
-              icon: const Icon(Icons.notifications, size: 30),
-            ),
+            // IconButton(
+            //   onPressed: () => pushScreen(context, const NotificationsScreen()),
+            //   icon: const Icon(Icons.notifications, size: 30),
+            // ),
           ],
         );
       },
